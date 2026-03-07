@@ -1,0 +1,106 @@
+###############################################################################
+# Client — Deployment + Service + HPA
+###############################################################################
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client
+  namespace: project-mgmt
+  labels:
+    app: client
+spec:
+  selector:
+    app: client
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: project-mgmt
+  labels:
+    app: client
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: client
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: client
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: client
+
+      # nginx runs as non-root (configured in Dockerfile)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101   # nginx user in nginx:alpine image
+
+      containers:
+        - name: client
+          # Replace with your ECR image URL after `terraform apply`
+          # e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com/project-mgmt-client:latest
+          image: PROJECT_MGMT_CLIENT_IMAGE:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: client-hpa
+  namespace: project-mgmt
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: client
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

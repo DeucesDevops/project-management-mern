@@ -1,0 +1,60 @@
+###############################################################################
+# Ingress — AWS Application Load Balancer via the ALB Ingress Controller
+# Routes:  /* → client:80
+#          /api/* → server:5001
+###############################################################################
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: project-mgmt
+  annotations:
+    # ALB Ingress Controller
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # HTTPS
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80,"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # Replace with your ACM certificate ARN
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID"
+
+    # Health check
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "10"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # Access logs (replace bucket name)
+    alb.ingress.kubernetes.io/load-balancer-attributes: >-
+      access_logs.s3.enabled=true,
+      access_logs.s3.bucket=YOUR_ALB_LOGS_BUCKET,
+      idle_timeout.timeout_seconds=60
+
+    # Security
+    alb.ingress.kubernetes.io/wafv2-acl-arn: ""  # Optional: add WAFv2 ARN
+
+spec:
+  rules:
+    # Replace with your actual domain
+    - host: app.yourdomain.com
+      http:
+        paths:
+          # API traffic → backend server
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  number: 5001
+          # All other traffic → React frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client
+                port:
+                  number: 80

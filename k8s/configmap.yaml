@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: project-mgmt
+data:
+  NODE_ENV: "production"
+  PORT: "5001"
+  MONGO_DB: "project_management"
+  # When using in-cluster MongoDB:
+  MONGO_HOST: "mongodb"
+  MONGO_PORT: "27017"
+  # When using in-cluster Redis:
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"

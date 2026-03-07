@@ -1,0 +1,39 @@
+###############################################################################
+# Terraform Variable Values — Example
+# Copy to terraform.tfvars and fill in the values
+#   cp terraform.tfvars.example terraform.tfvars
+# NEVER commit terraform.tfvars to version control (it's in .gitignore)
+###############################################################################
+
+aws_region   = "us-east-1"
+project_name = "project-mgmt"
+environment  = "production"
+
+# ── VPC ───────────────────────────────────────────────────────────────────────
+vpc_cidr                 = "10.0.0.0/16"
+availability_zones_count = 3
+
+# ── EKS ──────────────────────────────────────────────────────────────────────
+cluster_version                      = "1.30"
+cluster_endpoint_public_access       = true
+cluster_endpoint_public_access_cidrs = ["YOUR_IP/32"] # Restrict to known IPs
+
+# ── Node Groups ───────────────────────────────────────────────────────────────
+node_group_instance_types = ["t3.medium", "t3a.medium"]
+node_group_min_size       = 2
+node_group_max_size       = 10
+node_group_desired_size   = 3
+node_disk_size            = 50
+
+# ── ECR ──────────────────────────────────────────────────────────────────────
+ecr_image_retention_count = 10
+
+# ── Optional: DocumentDB instead of in-cluster MongoDB ───────────────────────
+enable_documentdb    = false
+docdb_instance_class = "db.r6g.large"
+docdb_instance_count = 2
+
+# ── Optional: ElastiCache instead of in-cluster Redis ────────────────────────
+enable_elasticache          = false
+elasticache_node_type       = "cache.t3.micro"
+elasticache_num_cache_nodes = 1

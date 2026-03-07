@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'http://localhost:5002/api',
+    // In Docker/production, nginx proxies /api → backend container.
+    // Locally, set VITE_API_URL=http://localhost:5001/api in your .env file.
+    baseURL: import.meta.env.VITE_API_URL ?? '/api',
     headers: {
         'Content-Type': 'application/json',
     },

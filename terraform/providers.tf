@@ -22,6 +22,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 
   # ── Remote State (S3 + DynamoDB locking) ──────────────────────────────────
@@ -47,7 +51,10 @@ provider "aws" {
   }
 }
 
-# Kubernetes provider — uses the EKS cluster token/ca generated in eks.tf
+# Kubernetes provider — credentials resolved after EKS cluster is created.
+# IMPORTANT: on first apply, run:
+#   terraform apply -target=module.eks
+# Then run a plain `terraform apply` to provision K8s resources.
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)

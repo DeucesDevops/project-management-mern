@@ -1,8 +1,7 @@
 ###############################################################################
 # Terraform Variable Values — Example
-# Copy to terraform.tfvars and fill in the values
-#   cp terraform.tfvars.example terraform.tfvars
-# NEVER commit terraform.tfvars to version control (it's in .gitignore)
+# cp terraform.tfvars.example terraform.tfvars  && fill in secrets
+# NEVER commit terraform.tfvars (it's in .gitignore)
 ###############################################################################
 
 aws_region   = "us-east-1"
@@ -16,9 +15,8 @@ availability_zones_count = 3
 # ── EKS ──────────────────────────────────────────────────────────────────────
 cluster_version                      = "1.30"
 cluster_endpoint_public_access       = true
-cluster_endpoint_public_access_cidrs = ["YOUR_IP/32"] # Restrict to known IPs
+cluster_endpoint_public_access_cidrs = ["YOUR_IP/32"]
 
-# ── Node Groups ───────────────────────────────────────────────────────────────
 node_group_instance_types = ["t3.medium", "t3a.medium"]
 node_group_min_size       = 2
 node_group_max_size       = 10
@@ -28,12 +26,40 @@ node_disk_size            = 50
 # ── ECR ──────────────────────────────────────────────────────────────────────
 ecr_image_retention_count = 10
 
-# ── Optional: DocumentDB instead of in-cluster MongoDB ───────────────────────
-enable_documentdb    = false
-docdb_instance_class = "db.r6g.large"
-docdb_instance_count = 2
+# ── Secrets (leave null to auto-generate) ─────────────────────────────────────
+# jwt_secret          = "your-64-char-secret"
+# mongo_root_user     = "admin"
+# mongo_root_password = "strong-password"
+# redis_password      = "strong-password"
 
-# ── Optional: ElastiCache instead of in-cluster Redis ────────────────────────
+# ── App Config ────────────────────────────────────────────────────────────────
+mongo_db      = "project_management"
+k8s_namespace = "project-mgmt"
+
+# ── Docker Images (leave empty to default to ECR :latest) ────────────────────
+# server_image = "123456789.dkr.ecr.us-east-1.amazonaws.com/project-mgmt-server:v1.0.0"
+# client_image = "123456789.dkr.ecr.us-east-1.amazonaws.com/project-mgmt-client:v1.0.0"
+
+# ── Replicas ─────────────────────────────────────────────────────────────────
+server_replicas     = 2
+server_min_replicas = 2
+server_max_replicas = 10
+client_replicas     = 2
+client_min_replicas = 2
+client_max_replicas = 6
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+app_domain          = "app.yourdomain.com"
+acm_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_UUID"
+alb_logs_bucket     = "" # e.g. "my-alb-logs-bucket"
+
+# ── Optional: Amazon DocumentDB (replaces in-cluster MongoDB) ─────────────────
+enable_documentdb     = false
+docdb_master_username = "admin"
+docdb_instance_class  = "db.r6g.large"
+docdb_instance_count  = 2
+
+# ── Optional: Amazon ElastiCache Redis (replaces in-cluster Redis) ────────────
 enable_elasticache          = false
 elasticache_node_type       = "cache.t3.micro"
 elasticache_num_cache_nodes = 1

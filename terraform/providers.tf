@@ -22,6 +22,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 
   # ── Remote State (S3 + DynamoDB locking) ──────────────────────────────────
@@ -47,7 +51,7 @@ provider "aws" {
   }
 }
 
-# Kubernetes provider — uses the EKS cluster token/ca generated in eks.tf
+# Kubernetes provider — uses the EKS cluster token/ca generated in the eks module
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
@@ -64,10 +68,6 @@ provider "helm" {
 
 data "aws_eks_cluster_auth" "cluster" {
   name = module.eks.cluster_name
-}
-
-data "aws_availability_zones" "available" {
-  state = "available"
 }
 
 data "aws_caller_identity" "current" {}

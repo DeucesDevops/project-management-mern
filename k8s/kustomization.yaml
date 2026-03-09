@@ -1,0 +1,44 @@
+###############################################################################
+# Kustomization — root manifest list for ArgoCD GitOps
+#
+# ArgoCD watches this directory and syncs all listed resources to EKS.
+# CI updates the `images` section below with new SHA tags after each push.
+#
+# Note: server/secret.yaml is intentionally excluded — the real secret is
+# created imperatively and must never be committed to git:
+#   kubectl create secret generic app-secrets --namespace project-mgmt \
+#     --from-literal=JWT_SECRET='...' \
+#     --from-literal=MONGO_ROOT_USER='...' \
+#     --from-literal=MONGO_ROOT_PASSWORD='...' \
+#     --from-literal=REDIS_PASSWORD='...'
+#
+# Note: If using managed DocumentDB/ElastiCache (enable_documentdb/
+# enable_elasticache = true in Terraform), remove mongodb.yaml and
+# redis.yaml from the resources list below.
+###############################################################################
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - server/configmap.yaml
+  - server/deployment.yaml
+  - server/service.yaml
+  - server/hpa.yaml
+  - client/deployment.yaml
+  - client/service.yaml
+  - ingress/ingress.yaml
+  - mongodb.yaml
+  - redis.yaml
+  - network-policy.yaml
+
+# Image tags are updated automatically by CI via:
+#   kustomize edit set image project-mgmt-server=<ecr-url>:<sha>
+#   kustomize edit set image project-mgmt-client=<ecr-url>:<sha>
+images:
+  - name: project-mgmt-server
+    newName: project-mgmt-server
+    newTag: latest
+  - name: project-mgmt-client
+    newName: project-mgmt-client
+    newTag: latest

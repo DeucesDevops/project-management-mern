@@ -1,24 +1,6 @@
 ###############################################################################
-# Client — Deployment + Service + HPA
+# Client — Deployment
 ###############################################################################
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: client
-  namespace: project-mgmt
-  labels:
-    app: client
-spec:
-  selector:
-    app: client
-  ports:
-    - port: 80
-      targetPort: 80
-  type: ClusterIP
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,6 +23,8 @@ spec:
       labels:
         app: client
     spec:
+      terminationGracePeriodSeconds: 30
+
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
@@ -49,19 +33,25 @@ spec:
             matchLabels:
               app: client
 
-      # nginx runs as non-root (configured in Dockerfile)
+      # nginx:stable-alpine runs as uid 101
       securityContext:
         runAsNonRoot: true
-        runAsUser: 101   # nginx user in nginx:alpine image
+        runAsUser: 101
 
       containers:
         - name: client
-          # Replace with your ECR image URL after `terraform apply`
-          # e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com/project-mgmt-client:latest
-          image: PROJECT_MGMT_CLIENT_IMAGE:latest
+          # Image name matches kustomization.yaml `images[].name`
+          # kustomize edit set image will substitute full ECR URL + SHA tag
+          image: project-mgmt-client:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+
           resources:
             requests:
               cpu: "50m"
@@ -69,38 +59,29 @@ spec:
             limits:
               cpu: "200m"
               memory: "256Mi"
+
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 10
+
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 30
             timeoutSeconds: 5
+            failureThreshold: 3
+
           readinessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
-
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: client-hpa
-  namespace: project-mgmt
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: client
-  minReplicas: 2
-  maxReplicas: 6
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
+            failureThreshold: 3

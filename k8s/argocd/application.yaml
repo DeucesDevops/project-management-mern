@@ -1,0 +1,82 @@
+###############################################################################
+# ArgoCD Application — project-mgmt
+#
+# Apply this AFTER ArgoCD is installed on the cluster.
+# ArgoCD will then own and continuously reconcile all k8s/ resources.
+#
+# ── Install ArgoCD (one-time, run on the cluster) ────────────────────────────
+#
+#   kubectl create namespace argocd
+#   kubectl apply -n argocd \
+#     -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+#
+#   # Wait for ArgoCD to be ready
+#   kubectl wait --for=condition=available deployment/argocd-server \
+#     -n argocd --timeout=120s
+#
+#   # Get initial admin password
+#   kubectl get secret argocd-initial-admin-secret \
+#     -n argocd -o jsonpath="{.data.password}" | base64 -d
+#
+#   # Port-forward ArgoCD UI (optional, for local access)
+#   kubectl port-forward svc/argocd-server -n argocd 8080:443
+#
+# ── Apply this Application (one-time) ────────────────────────────────────────
+#
+#   # Update repoURL below to your actual GitHub repo, then:
+#   kubectl apply -f k8s/argocd/application.yaml
+#
+# After this, ArgoCD manages all future deployments automatically when
+# CI commits updated image tags to k8s/kustomization.yaml.
+#
+# ── EKS image pull permissions ────────────────────────────────────────────────
+# EKS nodes pull from ECR using the node IAM role — no imagePullSecrets needed.
+# Ensure the node group IAM role has AmazonEC2ContainerRegistryReadOnly attached:
+#   aws iam attach-role-policy \
+#     --role-name <node-group-role-name> \
+#     --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+###############################################################################
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: project-mgmt
+  namespace: argocd
+  # Cascade delete: removing this Application also removes all managed k8s resources
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    # Replace with your actual repository URL
+    repoURL: https://github.com/YOUR_ORG/YOUR_REPO.git
+    targetRevision: main
+    path: k8s
+
+    # ArgoCD uses kustomize natively — no extra config needed
+    kustomize: {}
+
+  destination:
+    # Deploy to the same cluster ArgoCD runs on
+    server: https://kubernetes.default.svc
+    namespace: project-mgmt
+
+  syncPolicy:
+    automated:
+      prune: true       # Remove resources deleted from git
+      selfHeal: true    # Revert manual kubectl changes (drift correction)
+    syncOptions:
+      - CreateNamespace=true    # Create project-mgmt namespace if missing
+      - ServerSideApply=true    # Avoid annotation size limits on large resources
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+
+  # Health checks override — ArgoCD tracks rollout status automatically
+  # for Deployments and StatefulSets
+  revisionHistoryLimit: 5

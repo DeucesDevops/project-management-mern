@@ -1,5 +1,5 @@
 ###############################################################################
-# ECR Repositories — client & server images
+# ECR Module — client & server image repositories
 ###############################################################################
 
 resource "aws_ecr_repository" "client" {
@@ -37,11 +37,11 @@ resource "aws_ecr_lifecycle_policy" "client" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last ${var.ecr_image_retention_count} images"
+        description  = "Keep last ${var.image_retention_count} images"
         selection = {
           tagStatus   = "any"
           countType   = "imageCountMoreThan"
-          countNumber = var.ecr_image_retention_count
+          countNumber = var.image_retention_count
         }
         action = { type = "expire" }
       }
@@ -56,11 +56,11 @@ resource "aws_ecr_lifecycle_policy" "server" {
     rules = [
       {
         rulePriority = 1
-        description  = "Keep last ${var.ecr_image_retention_count} images"
+        description  = "Keep last ${var.image_retention_count} images"
         selection = {
           tagStatus   = "any"
           countType   = "imageCountMoreThan"
-          countNumber = var.ecr_image_retention_count
+          countNumber = var.image_retention_count
         }
         action = { type = "expire" }
       }

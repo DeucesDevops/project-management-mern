@@ -15,104 +15,7 @@ spec:
     - Ingress
     - Egress
 
-# Allow client → server on port 5001 (via nginx proxy)
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-client-to-server
-  namespace: project-mgmt
-spec:
-  podSelector:
-    matchLabels:
-      app: server
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: client
-      ports:
-        - port: 5001
-  policyTypes:
-    - Ingress
-
-# Allow ALB health-check + ingress traffic to client
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-to-client
-  namespace: project-mgmt
-spec:
-  podSelector:
-    matchLabels:
-      app: client
-  ingress:
-    - ports:
-        - port: 80
-  policyTypes:
-    - Ingress
-
-# Allow ALB health-check + ingress traffic to server
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-to-server
-  namespace: project-mgmt
-spec:
-  podSelector:
-    matchLabels:
-      app: server
-  ingress:
-    - ports:
-        - port: 5001
-  policyTypes:
-    - Ingress
-
-# Allow server → mongodb
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-server-to-mongodb
-  namespace: project-mgmt
-spec:
-  podSelector:
-    matchLabels:
-      app: mongodb
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: server
-      ports:
-        - port: 27017
-  policyTypes:
-    - Ingress
-
-# Allow server → redis
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-server-to-redis
-  namespace: project-mgmt
-spec:
-  podSelector:
-    matchLabels:
-      app: redis
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: server
-      ports:
-        - port: 6379
-  policyTypes:
-    - Ingress
-
-# Allow DNS egress for all pods
+# Allow DNS egress for all pods (required before any other egress works)
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -130,40 +33,26 @@ spec:
   policyTypes:
     - Egress
 
-# Allow server egress to mongodb + redis + external (for MongoDB Atlas if needed)
+# ── Client ────────────────────────────────────────────────────────────────────
+
+# Allow ALB → client ingress (ALB uses target-type: ip, arrives from VPC CIDR)
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-server-egress
+  name: allow-ingress-to-client
   namespace: project-mgmt
 spec:
   podSelector:
     matchLabels:
-      app: server
-  egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app: mongodb
-      ports:
-        - port: 27017
-    - to:
-        - podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - port: 6379
-    # Allow egress to kube-dns
+      app: client
+  ingress:
     - ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
+        - port: 80
   policyTypes:
-    - Egress
+    - Ingress
 
-# Allow client egress to server
+# Allow client egress to server only
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -188,3 +77,111 @@ spec:
           protocol: TCP
   policyTypes:
     - Egress
+
+# ── Server ────────────────────────────────────────────────────────────────────
+
+# Allow ALB → server ingress (from any source — ALB IPs are from VPC CIDR)
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-server
+  namespace: project-mgmt
+spec:
+  podSelector:
+    matchLabels:
+      app: server
+  ingress:
+    - ports:
+        - port: 5001
+  policyTypes:
+    - Ingress
+
+# Allow server egress: in-cluster MongoDB, in-cluster Redis, external MongoDB Atlas, DNS
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-egress
+  namespace: project-mgmt
+spec:
+  podSelector:
+    matchLabels:
+      app: server
+  egress:
+    # In-cluster MongoDB
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - port: 27017
+    # In-cluster Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+    # External MongoDB Atlas (and other MongoDB-compatible services)
+    - ports:
+        - port: 27017
+          protocol: TCP
+    # External HTTPS (Atlas control plane, third-party APIs)
+    - ports:
+        - port: 443
+          protocol: TCP
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+  policyTypes:
+    - Egress
+
+# ── MongoDB ───────────────────────────────────────────────────────────────────
+
+# Allow server → mongodb ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-to-mongodb
+  namespace: project-mgmt
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: server
+      ports:
+        - port: 27017
+  policyTypes:
+    - Ingress
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+
+# Allow server → redis ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server-to-redis
+  namespace: project-mgmt
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: server
+      ports:
+        - port: 6379
+  policyTypes:
+    - Ingress

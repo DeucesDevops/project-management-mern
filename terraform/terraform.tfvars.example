@@ -29,9 +29,10 @@ node_disk_size            = 50
 ecr_image_retention_count = 10
 
 # ── Optional: DocumentDB instead of in-cluster MongoDB ───────────────────────
-enable_documentdb    = false
-docdb_instance_class = "db.r6g.large"
-docdb_instance_count = 2
+enable_documentdb     = false
+docdb_instance_class  = "db.r6g.large"
+docdb_instance_count  = 2
+docdb_master_username = "admin"
 
 # ── Optional: ElastiCache instead of in-cluster Redis ────────────────────────
 enable_elasticache          = false

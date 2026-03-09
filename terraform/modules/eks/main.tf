@@ -1,22 +1,18 @@
 ###############################################################################
-# EKS Cluster
+# EKS Module
 ###############################################################################
-
-locals {
-  cluster_name = "${var.project_name}-${var.environment}"
-}
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.8"
 
-  cluster_name    = local.cluster_name
+  cluster_name    = var.cluster_name
   cluster_version = var.cluster_version
 
   # ── Networking ───────────────────────────────────────────────────────────────
-  vpc_id                   = module.vpc.vpc_id
-  subnet_ids               = module.vpc.private_subnets
-  control_plane_subnet_ids = module.vpc.private_subnets
+  vpc_id                   = var.vpc_id
+  subnet_ids               = var.private_subnets
+  control_plane_subnet_ids = var.private_subnets
 
   # ── API Server Access ────────────────────────────────────────────────────────
   cluster_endpoint_public_access       = var.cluster_endpoint_public_access
@@ -33,7 +29,7 @@ module "eks" {
     }
     vpc-cni = {
       most_recent    = true
-      before_compute = true # Must be installed before nodes join
+      before_compute = true
       configuration_values = jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
@@ -49,9 +45,8 @@ module "eks" {
 
   # ── Managed Node Groups ──────────────────────────────────────────────────────
   eks_managed_node_groups = {
-    # General-purpose on-demand nodes (system / critical workloads)
     system = {
-      name           = "${local.cluster_name}-system"
+      name           = "${var.cluster_name}-system"
       instance_types = var.node_group_instance_types
       capacity_type  = "ON_DEMAND"
 
@@ -72,9 +67,8 @@ module "eks" {
       }
     }
 
-    # Application workloads — mix of on-demand + spot for cost savings
     app = {
-      name           = "${local.cluster_name}-app"
+      name           = "${var.cluster_name}-app"
       instance_types = var.node_group_instance_types
       capacity_type  = "SPOT"
 
@@ -96,16 +90,12 @@ module "eks" {
     }
   }
 
-  # ── Cluster Access (aws-auth ConfigMap) ──────────────────────────────────────
-  # Add the current caller as a cluster admin so the Terraform executor can manage
-  # Kubernetes resources via the kubernetes/helm providers.
   enable_cluster_creator_admin_permissions = true
 
-  # ── Logging ──────────────────────────────────────────────────────────────────
   cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   tags = {
-    "karpenter.sh/discovery" = local.cluster_name
+    "karpenter.sh/discovery" = var.cluster_name
   }
 }
 
@@ -114,7 +104,7 @@ module "ebs_csi_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.37"
 
-  role_name             = "${local.cluster_name}-ebs-csi"
+  role_name             = "${var.cluster_name}-ebs-csi"
   attach_ebs_csi_policy = true
 
   oidc_providers = {
@@ -130,7 +120,7 @@ module "alb_controller_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.37"
 
-  role_name                              = "${local.cluster_name}-alb-controller"
+  role_name                              = "${var.cluster_name}-alb-controller"
   attach_load_balancer_controller_policy = true
 
   oidc_providers = {
@@ -146,7 +136,7 @@ module "cluster_autoscaler_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.37"
 
-  role_name                        = "${local.cluster_name}-cluster-autoscaler"
+  role_name                        = "${var.cluster_name}-cluster-autoscaler"
   attach_cluster_autoscaler_policy = true
   cluster_autoscaler_cluster_names = [module.eks.cluster_name]
 

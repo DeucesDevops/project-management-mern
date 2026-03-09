@@ -43,12 +43,12 @@ output "configure_kubectl" {
 # ── ECR ──────────────────────────────────────────────────────────────────────
 output "ecr_client_repository_url" {
   description = "URL of the client ECR repository"
-  value       = aws_ecr_repository.client.repository_url
+  value       = module.ecr.client_repository_url
 }
 
 output "ecr_server_repository_url" {
   description = "URL of the server ECR repository"
-  value       = aws_ecr_repository.server.repository_url
+  value       = module.ecr.server_repository_url
 }
 
 output "ecr_registry" {
@@ -59,24 +59,24 @@ output "ecr_registry" {
 # ── DocumentDB ────────────────────────────────────────────────────────────────
 output "docdb_endpoint" {
   description = "DocumentDB cluster endpoint (if enabled)"
-  value       = var.enable_documentdb ? aws_docdb_cluster.main[0].endpoint : "DocumentDB not enabled"
+  value       = module.documentdb.endpoint
   sensitive   = true
 }
 
 # ── ElastiCache ───────────────────────────────────────────────────────────────
 output "redis_endpoint" {
   description = "ElastiCache Redis primary endpoint (if enabled)"
-  value       = var.enable_elasticache ? aws_elasticache_replication_group.redis[0].primary_endpoint_address : "ElastiCache not enabled"
+  value       = module.elasticache.primary_endpoint_address
   sensitive   = true
 }
 
 # ── IAM ──────────────────────────────────────────────────────────────────────
 output "alb_controller_role_arn" {
   description = "IAM role ARN for the AWS Load Balancer Controller"
-  value       = module.alb_controller_irsa_role.iam_role_arn
+  value       = module.eks.alb_controller_role_arn
 }
 
 output "cluster_autoscaler_role_arn" {
   description = "IAM role ARN for the Cluster Autoscaler"
-  value       = module.cluster_autoscaler_irsa_role.iam_role_arn
+  value       = module.eks.cluster_autoscaler_role_arn
 }

@@ -1,0 +1,103 @@
+###############################################################################
+# Ingress — AWS ALB via the ALB Ingress Controller
+#
+# Two Ingress objects share the same ALB (via group.name) so each backend
+# gets its own target group with the correct health check path.
+#
+# Routing (single domain, path-based):
+#   app.yourdomain.com/api/* → server:5001   (health: /api/health)
+#   app.yourdomain.com/*     → client:80      (health: /healthz)
+#
+# Replace placeholders before applying:
+#   - app.yourdomain.com      → your actual domain
+#   - arn:aws:acm:...         → ACM certificate ARN (from AWS Console or
+#                               `aws acm list-certificates --region us-east-1`)
+#   - YOUR_ALB_LOGS_BUCKET    → S3 bucket name for ALB access logs
+###############################################################################
+
+# ── Server backend — /api/* ───────────────────────────────────────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-server
+  namespace: project-mgmt
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/group.name: project-mgmt        # shares ALB with ingress-client
+    alb.ingress.kubernetes.io/group.order: "10"               # server rules evaluated first
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # HTTPS
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID"
+
+    # Health check for server target group
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/healthcheck-port: "5001"
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "10"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # ALB attributes
+    alb.ingress.kubernetes.io/load-balancer-attributes: >-
+      access_logs.s3.enabled=true,
+      access_logs.s3.bucket=YOUR_ALB_LOGS_BUCKET,
+      idle_timeout.timeout_seconds=60
+
+    # Optional: WAFv2
+    alb.ingress.kubernetes.io/wafv2-acl-arn: ""
+spec:
+  rules:
+    - host: app.yourdomain.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  number: 5001
+
+# ── Client backend — /* ───────────────────────────────────────────────────────
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-client
+  namespace: project-mgmt
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/group.name: project-mgmt        # shares ALB with ingress-server
+    alb.ingress.kubernetes.io/group.order: "20"               # catch-all evaluated after /api
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # HTTPS (shared listener — only one certificate needed per group)
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REGION:ACCOUNT_ID:certificate/CERT_ID"
+
+    # Health check for client (nginx) target group
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/healthcheck-port: "80"
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+spec:
+  rules:
+    - host: app.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client
+                port:
+                  number: 80

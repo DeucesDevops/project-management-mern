@@ -1,24 +1,6 @@
 ###############################################################################
-# Server — Deployment + Service + HPA
+# Server — Deployment
 ###############################################################################
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: server
-  namespace: project-mgmt
-  labels:
-    app: server
-spec:
-  selector:
-    app: server
-  ports:
-    - port: 5001
-      targetPort: 5001
-  type: ClusterIP
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,6 +23,8 @@ spec:
       labels:
         app: server
     spec:
+      terminationGracePeriodSeconds: 30
+
       # Spread replicas across nodes for high availability
       topologySpreadConstraints:
         - maxSkew: 1
@@ -57,12 +41,19 @@ spec:
 
       containers:
         - name: server
-          # Replace with your ECR image URL after `terraform apply`
-          # e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com/project-mgmt-server:latest
-          image: PROJECT_MGMT_SERVER_IMAGE:latest
+          # Image name matches kustomization.yaml `images[].name`
+          # kustomize edit set image will substitute full ECR URL + SHA tag
+          image: project-mgmt-server:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5001
+
+          lifecycle:
+            preStop:
+              exec:
+                # Drain in-flight connections before SIGTERM is sent
+                command: ["sh", "-c", "sleep 5"]
+
           env:
             - name: NODE_ENV
               valueFrom:
@@ -74,6 +65,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -103,6 +99,7 @@ spec:
                   key: REDIS_PASSWORD
             - name: REDIS_URL
               value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+
           resources:
             requests:
               cpu: "100m"
@@ -110,6 +107,15 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 5001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12  # Allow up to 60s for cold start + Atlas pool warmup
+
           livenessProbe:
             httpGet:
               path: /api/health
@@ -118,6 +124,7 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
+
           readinessProbe:
             httpGet:
               path: /api/health
@@ -126,50 +133,3 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-          startupProbe:
-            httpGet:
-              path: /api/health
-              port: 5001
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            failureThreshold: 12   # Allow up to 60s for cold start
-
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: server-hpa
-  namespace: project-mgmt
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: server
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Percent
-          value: 25
-          periodSeconds: 60
-    scaleUp:
-      stabilizationWindowSeconds: 60
-      policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 60

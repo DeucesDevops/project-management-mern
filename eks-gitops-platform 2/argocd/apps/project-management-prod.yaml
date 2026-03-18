@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: project-management-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io
+  labels:
+    app.kubernetes.io/name: project-management
+    environment: prod
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: devops-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: devops-alerts
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: devops-alerts
+spec:
+  project: apps
+
+  source:
+    repoURL: https://github.com/YOUR_GITHUB_USERNAME/eks-gitops-platform
+    targetRevision: HEAD
+    path: kubernetes/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app-project-management
+
+  # NOTE: No automated sync for prod — all prod deployments require
+  # manual approval via ArgoCD UI or CLI:
+  #   argocd app sync project-management-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

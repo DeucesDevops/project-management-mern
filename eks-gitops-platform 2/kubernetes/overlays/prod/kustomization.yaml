@@ -1,0 +1,117 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: app-project-management
+
+patches:
+  # Server — 3 replicas minimum in prod
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: server
+
+  # Client — 3 replicas minimum in prod
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: client
+
+  # Server — larger resource limits for prod load
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 1Gi
+    target:
+      kind: Deployment
+      name: server
+
+  # HPA — full scale ceiling in prod
+  - patch: |-
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
+      - op: replace
+        path: /spec/metrics/0/resource/target/averageUtilization
+        value: 60    # Scale earlier in prod to avoid latency spikes
+    target:
+      kind: HorizontalPodAutoscaler
+      name: server-hpa
+
+  # MongoDB — full prod PVC size
+  - patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 50Gi
+    target:
+      kind: StatefulSet
+      name: mongodb
+
+  # ExternalSecret — point to prod secret in AWS
+  - patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: project-management/prod
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: project-management/prod
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: project-management/prod
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: project-management/prod
+      - op: replace
+        path: /spec/data/4/remoteRef/key
+        value: project-management/prod
+    target:
+      kind: ExternalSecret
+      name: project-management-secrets
+
+  # Ingress — prod hostname + ACM cert
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: pm.yourdomain.com
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/PROD_CERT_ID
+    target:
+      kind: Ingress
+      name: project-management-ingress
+
+  # PodDisruptionBudget — ensure at least 2 server pods always available
+  - patch: |-
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: server-pdb
+        namespace: app-project-management
+      spec:
+        minAvailable: 2
+        selector:
+          matchLabels:
+            app: server
+    target:
+      kind: PodDisruptionBudget
+      name: server-pdb
+
+images:
+  - name: YOUR_ECR_REPO/pm-server
+    newTag: "1.0.0"   # CI pins exact semver/SHA for prod — never use latest in prod
+  - name: YOUR_ECR_REPO/pm-client
+    newTag: "1.0.0"

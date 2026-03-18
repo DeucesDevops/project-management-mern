@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: node
+      rules:
+        - alert: NodeCPUHighUsage
+          expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (node)) * 100 > 85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU on {{ $labels.node }}"
+            description: "CPU above 85% for 5 minutes."
+
+        - alert: NodeMemoryPressure
+          expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Low memory on {{ $labels.node }}"
+            description: "Less than 15% memory available."
+
+        - alert: NodeDiskPressure
+          expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Low disk on {{ $labels.node }}"
+            description: "Root filesystem below 20% free."

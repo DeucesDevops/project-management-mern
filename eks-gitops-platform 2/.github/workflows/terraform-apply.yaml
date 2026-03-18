@@ -1,0 +1,47 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+
+jobs:
+  apply-dev:
+    name: Apply - dev
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init
+        working-directory: terraform/environments/dev
+      - run: terraform apply -auto-approve
+        working-directory: terraform/environments/dev
+
+  apply-staging:
+    name: Apply - staging
+    runs-on: ubuntu-latest
+    environment: staging   # Requires manual approval gate in GitHub
+    needs: apply-dev
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init
+        working-directory: terraform/environments/staging
+      - run: terraform apply -auto-approve
+        working-directory: terraform/environments/staging

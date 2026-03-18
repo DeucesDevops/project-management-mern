@@ -1,0 +1,77 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: ""
+namespace: app-project-management
+
+# Dev: scale down replicas to save cost
+patches:
+  # Server — 1 replica in dev
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: server
+
+  # Client — 1 replica in dev
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: client
+
+  # MongoDB — smaller PVC in dev
+  - patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 5Gi
+    target:
+      kind: StatefulSet
+      name: mongodb
+
+  # ExternalSecret — point to dev secret in AWS
+  - patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: project-management/dev
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: project-management/dev
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: project-management/dev
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: project-management/dev
+      - op: replace
+        path: /spec/data/4/remoteRef/key
+        value: project-management/dev
+    target:
+      kind: ExternalSecret
+      name: project-management-secrets
+
+  # Ingress — dev hostname + ACM cert
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: pm.dev.yourdomain.com
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/DEV_CERT_ID
+    target:
+      kind: Ingress
+      name: project-management-ingress
+
+# Dev image tags (latest for fast iteration)
+images:
+  - name: YOUR_ECR_REPO/pm-server
+    newTag: latest
+  - name: YOUR_ECR_REPO/pm-client
+    newTag: latest

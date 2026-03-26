@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: project-management-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io   # Ensures ArgoCD cleans up resources on deletion
+  labels:
+    app.kubernetes.io/name: project-management
+    environment: dev
+spec:
+  project: apps
+
+  source:
+    repoURL: https://github.com/DeucesDevops/project-management-mern   # update this
+    targetRevision: HEAD
+    path: kubernetes/overlays/dev
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app-project-management
+
+  syncPolicy:
+    automated:
+      prune: true        # Remove resources deleted from Git
+      selfHeal: true     # Revert any manual kubectl changes automatically
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health checks — ArgoCD won't mark sync complete until all are healthy
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas   # Ignore HPA-managed replica count drift

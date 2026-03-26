@@ -1,0 +1,50 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client-svc
+  namespace: app-project-management
+  labels:
+    app: client
+spec:
+  selector:
+    app: client
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+---
+# ALB Ingress — routes external traffic to client, proxies /api to server
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: project-management-ingress
+  namespace: app-project-management
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: YOUR_ACM_CERT_ARN   # set per env via Kustomize
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/group.name: eks-gitops-platform       # share ALB across apps
+spec:
+  rules:
+    - host: pm.dev.yourdomain.com                                    # overridden per env
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: server-svc
+                port:
+                  number: 5001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client-svc
+                port:
+                  number: 80

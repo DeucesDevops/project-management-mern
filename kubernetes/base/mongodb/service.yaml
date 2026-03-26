@@ -1,0 +1,33 @@
+---
+# Headless service required by StatefulSet for stable DNS (mongodb-0.mongodb)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: app-project-management
+  labels:
+    app: mongodb
+spec:
+  clusterIP: None
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+      name: mongodb
+---
+# ClusterIP service for app connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-svc
+  namespace: app-project-management
+  labels:
+    app: mongodb
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+      name: mongodb

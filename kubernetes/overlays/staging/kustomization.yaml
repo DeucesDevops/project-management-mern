@@ -1,0 +1,75 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: app-project-management
+
+# Staging: production-like config but smaller than prod
+patches:
+  # Server — 2 replicas
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: server
+
+  # Client — 2 replicas
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: client
+
+  # HPA — tighter ceiling in staging
+  - patch: |-
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+    target:
+      kind: HorizontalPodAutoscaler
+      name: server-hpa
+
+  # ExternalSecret — point to staging secret in AWS
+  - patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: project-management/staging
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: project-management/staging
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: project-management/staging
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: project-management/staging
+      - op: replace
+        path: /spec/data/4/remoteRef/key
+        value: project-management/staging
+    target:
+      kind: ExternalSecret
+      name: project-management-secrets
+
+  # Ingress — staging hostname + ACM cert
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: pm.staging.yourdomain.com
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/STAGING_CERT_ID
+    target:
+      kind: Ingress
+      name: project-management-ingress
+
+images:
+  - name: YOUR_ECR_REPO/pm-server
+    newTag: staging   # CI pins exact SHA tag for staging
+  - name: YOUR_ECR_REPO/pm-client
+    newTag: staging
